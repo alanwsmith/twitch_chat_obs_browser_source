@@ -1,8 +1,8 @@
 -- title
 
-Twitch Chatbot Browser Source
+Twitch Chatbot OBS Browser Source
 
-GOAL: This is an anonymous Twitch bot
+This is an anonymous Twitch chat bot
 that produces a basic webpage to 
 display in OBS as a browser source.
 

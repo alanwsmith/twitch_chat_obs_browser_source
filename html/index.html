@@ -4,21 +4,59 @@
 <head>
   <meta charset="UTF-8">
   <title>Twitch Chat Browser Source</title>
+  <script src="htmx_1_9_5.min.js"></script>
+  <script src="htmx_ws_2023_09_07.js"></script>
+  <script>
+
+    /*
+    const init = () => {
+      const websocket = new WebSocket("ws://localhost:3314/ws");
+      websocket.onopen = function () {
+        console.log("connection opened");
+      }
+      websocket.onclose = function () {
+        console.log("connection closed");
+      }
+      websocket.onmessage = function (e) {
+        // console.log("received message: " + e.data);
+        const data = JSON.parse(e.data)
+        console.log(data)
+      }
+    }
+    */
+
+    // document.addEventListener("DOMContentLoaded", init);
+  </script>
+  <style>
+    body {
+      background-color: black;
+      color: goldenrod;
+    }
+
+    #theBox {
+      position: relative;
+      min-height: 20rem;
+      max-height: 20rem;
+      max-width: 32ch;
+      outline: 1px solid red;
+      overflow: scroll;
+    }
+
+    #theContent {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      paddint: 0.3rem;
+    }
+  </style>
 </head>
 
 <body>
-  <script>
-    const websocket = new WebSocket("ws://localhost:3314/ws");
-    websocket.onopen = function () {
-      console.log("connection opened");
-    }
-    websocket.onclose = function () {
-      console.log("connection closed");
-    }
-    websocket.onmessage = function (e) {
-      console.log("received message: " + e.data);
-    }
-  </script>
+  <div id="theBox">
+    <div id="theContent" hx-ext="ws" ws-connect="/ws">
+      <div id="notifications"></div>
+    </div>
+  </div>
 </body>
 
 </html>
