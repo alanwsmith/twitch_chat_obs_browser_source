@@ -1,1 +1,24 @@
-asdfasdfasdfa
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Twitch Chat Browser Source</title>
+</head>
+
+<body>
+  <script>
+    const websocket = new WebSocket("ws://localhost:3314/ws");
+    websocket.onopen = function () {
+      console.log("connection opened");
+    }
+    websocket.onclose = function () {
+      console.log("connection closed");
+    }
+    websocket.onmessage = function (e) {
+      console.log("received message: " + e.data);
+    }
+  </script>
+</body>
+
+</html>

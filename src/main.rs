@@ -1,13 +1,14 @@
-use axum::Router;
-use std::net::SocketAddr;
-use std::path::Path;
-// use std::sync::mpsc::Receiver;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::routing::get;
+use axum::Router;
+use futures::stream::StreamExt;
+use futures::SinkExt;
+use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -47,10 +48,20 @@ async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
+    println!("Connection requested");
     ws.on_upgrade(|socket| websocket(socket, state))
 }
 
-async fn websocket(stream: WebSocket, state: Arc<AppState>) {}
+async fn websocket(stream: WebSocket, state: Arc<AppState>) {
+    println!("Connection made");
+    let mut state_rx = state.twitch_tx.subscribe();
+    let (mut sender, mut _receiver) = stream.split();
+    while let Ok(msg) = state_rx.recv().await {
+        if sender.send(Message::Text(msg)).await.is_err() {
+            break;
+        }
+    }
+}
 
 async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
     let config = ClientConfig::default();
@@ -60,11 +71,9 @@ async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
         while let Some(message) = incoming_messages.recv().await {
             match message {
                 twitch_irc::message::ServerMessage::Privmsg(payload) => {
-                    println!("{}\n{}\n", payload.sender.name, payload.message_text);
+                    let _ = twitch_tx.send(payload.message_text.to_string());
                 }
-                _ => {
-                    // dbg!(message);
-                }
+                _ => {}
             }
         }
     });
