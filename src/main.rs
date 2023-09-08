@@ -1,3 +1,4 @@
+use ammonia::Builder;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use axum::extract::ws::WebSocketUpgrade;
@@ -7,6 +8,9 @@ use axum::routing::get;
 use axum::Router;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use maplit::{hashmap, hashset};
+use serde::Serialize;
+use serde_json::json;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -17,6 +21,12 @@ use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 use twitch_irc::SecureTCPTransport;
 use twitch_irc::TwitchIRCClient;
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "content", rename_all = "lowercase")]
+enum BrowserMessage {
+    Chat { sender: String, message: String },
+}
 
 struct AppState {
     twitch_tx: broadcast::Sender<String>,
@@ -71,7 +81,12 @@ async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
         while let Some(message) = incoming_messages.recv().await {
             match message {
                 twitch_irc::message::ServerMessage::Privmsg(payload) => {
-                    let _ = twitch_tx.send(payload.message_text.to_string());
+                    let chat_message = BrowserMessage::Chat {
+                        sender: payload.sender.name.to_string(),
+                        message: payload.message_text.to_string(),
+                    };
+                    let _ = twitch_tx
+                        .send(sanatize_html(serde_json::to_string(&chat_message).unwrap()));
                 }
                 _ => {}
             }
@@ -79,4 +94,16 @@ async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
     });
     client.join("theidofalan".to_owned()).unwrap();
     join_handle.await.unwrap();
+}
+
+fn sanatize_html(source: String) -> String {
+    let tags = hashset!["sup", "sub", "marquee", "b", "i", "strong", "em"];
+    let tag_attrs = hashmap![
+        // "span" => hashset!["id"]
+    ];
+    Builder::new()
+        .tags(tags)
+        .tag_attributes(tag_attrs)
+        .clean(source.as_str())
+        .to_string()
 }
