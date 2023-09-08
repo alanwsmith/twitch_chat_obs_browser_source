@@ -1,7 +1,13 @@
 use axum::Router;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::mpsc::Receiver;
+// use std::sync::mpsc::Receiver;
+use axum::extract::ws::Message;
+use axum::extract::ws::WebSocket;
+use axum::extract::ws::WebSocketUpgrade;
+use axum::extract::State;
+use axum::response::IntoResponse;
+use axum::routing::get;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -12,31 +18,39 @@ use twitch_irc::SecureTCPTransport;
 use twitch_irc::TwitchIRCClient;
 
 struct AppState {
-    tx: broadcast::Sender<String>,
-    rx: broadcast::Receiver<String>,
+    twitch_tx: broadcast::Sender<String>,
 }
 
 #[tokio::main]
 async fn main() {
     let (twitch_tx, _) = broadcast::channel::<String>(100);
     let mut set = JoinSet::new();
-    // set.spawn(twitch_bot());
-    // set.spawn(web_page());
     set.spawn(twitch_bot(twitch_tx.clone()));
     set.spawn(web_page(twitch_tx.clone()));
-    // web_page(twitch_tx.clone());
-    // tokio::spawn(twitch_bot()).await.unwrap();
     loop {}
 }
 
 async fn web_page(twitch_tx: broadcast::Sender<String>) {
+    let app_state = Arc::new(AppState { twitch_tx });
     let addr = SocketAddr::from(([127, 0, 0, 1], 3314));
-    let app = Router::new().nest_service("/", ServeDir::new(Path::new("html")));
+    let app = Router::new()
+        .route("/ws", get(websocket_handler))
+        .nest_service("/", ServeDir::new(Path::new("html")))
+        .with_state(app_state);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
 }
+
+async fn websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| websocket(socket, state))
+}
+
+async fn websocket(stream: WebSocket, state: Arc<AppState>) {}
 
 async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
     let config = ClientConfig::default();
