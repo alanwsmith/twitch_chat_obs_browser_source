@@ -10,9 +10,9 @@ use futures::stream::StreamExt;
 use futures::SinkExt;
 use maplit::{hashmap, hashset};
 use serde::Serialize;
-// use serde_json::json;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -34,6 +34,7 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    try_to_set_tmux_title();
     let (twitch_tx, _) = broadcast::channel::<String>(100);
     let mut set = JoinSet::new();
     set.spawn(twitch_bot(twitch_tx.clone()));
@@ -43,7 +44,7 @@ async fn main() {
 
 async fn web_page(twitch_tx: broadcast::Sender<String>) {
     let app_state = Arc::new(AppState { twitch_tx });
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3314));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3301));
     let app = Router::new()
         .route("/ws", get(websocket_handler))
         .nest_service("/", ServeDir::new(Path::new("html")))
@@ -81,13 +82,8 @@ async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
         while let Some(message) = incoming_messages.recv().await {
             match message {
                 twitch_irc::message::ServerMessage::Privmsg(payload) => {
-                    // let chat_message = BrowserMessage::Chat {
-                    //     sender: payload.sender.name.to_string(),
-                    //     message: payload.message_text.to_string(),
-                    // };
                     let clean_html = sanitize_html(payload.message_text.to_string());
                     let _ = twitch_tx
-                        // .send(sanatize_html(serde_json::to_string(&chat_message).unwrap()));
                         .send(format!(
                             r#"<div id="notifications" hx-swap-oob="beforeend"><div>{}</div><div>{}</div></div>"#,
                             payload.sender.name,
@@ -105,11 +101,17 @@ async fn twitch_bot(twitch_tx: broadcast::Sender<String>) {
 fn sanitize_html(source: String) -> String {
     let tags = hashset!["sup", "sub", "marquee", "b", "i", "strong", "em"];
     let tag_attrs = hashmap![
-        // "span" => hashset!["id"]
+        // TODO: slow this down and put it back in
+        // "marquee" => hashset!["direction"]
     ];
     Builder::new()
         .tags(tags)
         .tag_attributes(tag_attrs)
         .clean(source.as_str())
         .to_string()
+}
+
+fn try_to_set_tmux_title() {
+    let args: Vec<&str> = vec!["select-pane", "-T", "Twitch Chat Browser Source"];
+    let _ = Command::new("tmux").args(args).output().unwrap();
 }
